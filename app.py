@@ -1,23 +1,12 @@
-import re, sqlite3
+import os, sqlite3
 from flask import Flask, render_template, request, jsonify
 from sqlgen import to_sql, get_schema
+from security import validate, run_readonly, audit
 
 app = Flask(__name__)
-DB_URI = "file:sample.db?mode=ro"  # read-only: the real safety guarantee
-MAX_ROWS = 100
-
-BLOCKED = re.compile(
-    r"\b(insert|update|delete|drop|alter|create|attach|detach|pragma|replace|vacuum)\b",
-    re.I,
-)
-
-def is_safe(sql):
-    s = sql.strip().rstrip(";").strip()
-    if ";" in s:
-        return False
-    if not re.match(r"(?is)^(select|with)\b", s):
-        return False
-    return not BLOCKED.search(s)
+DB_FILE = os.environ.get("SQLGEN_DB", "sample.db")
+DB_URI = f"file:{DB_FILE}?mode=ro"  # last line of defense: the DB itself is read-only
+BLOCKED_COLUMNS = {"customers": ["email"]}  # never readable through this app
 
 @app.get("/")
 def index():
@@ -32,22 +21,29 @@ def query():
 
     con = sqlite3.connect(DB_URI, uri=True)
     try:
+        allowed = [r[0] for r in con.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")]
         try:
             sql = to_sql(question, get_schema(con))
-        except Exception as e:
-            app.logger.exception("Gemini call failed")
-            return jsonify(error="SQL generation failed (the model may be busy). Try again."), 502
+        except Exception:
+            app.logger.exception("model call failed")
+            audit({"question": question, "verdict": "model_error"})
+            return jsonify(error="SQL generation failed. Is the model server running?"), 502
 
-        if not is_safe(sql):
-            return jsonify(error="Blocked: only a single SELECT query is allowed.", sql=sql), 400
+        ok, reason, safe_sql = validate(sql, allowed, BLOCKED_COLUMNS)
+        if not ok:
+            audit({"question": question, "sql": sql, "verdict": "blocked", "reason": reason})
+            return jsonify(error=f"Blocked: {reason}", sql=sql), 400
 
         try:
-            cur = con.execute(sql)
-            cols = [c[0] for c in cur.description]
-            rows = cur.fetchmany(MAX_ROWS)
+            cols, rows, truncated = run_readonly(con, safe_sql)
         except sqlite3.Error as e:
-            return jsonify(error=f"SQL error: {e}", sql=sql), 400
-        return jsonify(sql=sql, columns=cols, rows=rows)
+            audit({"question": question, "sql": safe_sql, "verdict": "sql_error", "reason": str(e)})
+            return jsonify(error=f"SQL error: {e}", sql=safe_sql), 400
+
+        audit({"question": question, "sql": safe_sql, "verdict": "ok",
+               "row_count": len(rows), "truncated": truncated})
+        return jsonify(sql=safe_sql, columns=cols, rows=rows, truncated=truncated)
     finally:
         con.close()
 
