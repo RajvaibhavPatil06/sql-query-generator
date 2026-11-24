@@ -37,11 +37,14 @@ Execution accuracy: generated SQL and a hand-written reference query must return
 | Test set | Model | Result |
 |---|---|---|
 | 6 basic questions, 2-table database | Qwen3.5-4B (Q4, local, CPU) | 6/6 |
-| 15 harder questions, 4-table database | Qwen3.5-4B (Q4, local, CPU) | 13/15 |
+| 15 harder questions, 4-table database | Qwen3.5-4B (Q4, local, CPU) | 13/15 before prompt rules, 14/15 after (rules were written from this set's failures, so this is not a clean test) |
+| 12 held-out questions, same database (written before prompt tuning) | Qwen3.5-4B (Q4, local, CPU) | 11/12 before and 11/12 after |
 
 Caveats: small test sets, one run each, and the questions were written by the author.
-Of the two failures, one returned an extra column (strict comparison counts this as a
-failure), and one grouped by customer instead of by order.
+Remaining failures are of two kinds: returning an extra column (strict comparison counts
+this as a failure, and the model still does it after a prompt rule against it), and
+confusing what one row of the answer represents (for example, listing cities when the
+question asks how many cities). The prompt rules did not change the held-out score.
 
 Security tests: 32 validator cases (`tests/test_security.py`) all behave as expected, and
 7 of 7 adversarial plain-English questions were blocked end to end. This shows common

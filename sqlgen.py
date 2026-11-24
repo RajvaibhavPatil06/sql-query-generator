@@ -57,7 +57,10 @@ def to_sql(question, schema):
 Schema:
 {schema}
 
-Rules: output ONLY the SQL, no markdown, no explanation. SELECT statements only.
+Rules:
+- Output ONLY the SQL, no markdown, no explanation. SELECT statements only.
+- Return only the columns the question asks for. Do not add extra columns such as counts or totals unless asked.
+- Aggregate at the level the question names: for example, a question about a single order means grouping by the order, not by the customer.
 Question: {question}"""
     call = _call_gemini if BACKEND == "gemini" else _call_local
     return clean_sql(call(prompt))
