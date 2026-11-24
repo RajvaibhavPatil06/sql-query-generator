@@ -1,0 +1,14 @@
+[
+  {"question": "Total order amount per city",
+   "reference_sql": "SELECT c.city, SUM(o.amount) FROM customers c JOIN orders o ON c.id = o.customer_id GROUP BY c.city"},
+  {"question": "How many customers are there?",
+   "reference_sql": "SELECT COUNT(*) FROM customers"},
+  {"question": "What is the name of the customer who spent the most in total?",
+   "reference_sql": "SELECT c.name FROM customers c JOIN orders o ON c.id = o.customer_id GROUP BY c.id ORDER BY SUM(o.amount) DESC LIMIT 1"},
+  {"question": "List the ids of orders with an amount above 500",
+   "reference_sql": "SELECT id FROM orders WHERE amount > 500"},
+  {"question": "What is the average order amount?",
+   "reference_sql": "SELECT AVG(amount) FROM orders"},
+  {"question": "Names of customers who placed an order in November 2026",
+   "reference_sql": "SELECT DISTINCT c.name FROM customers c JOIN orders o ON c.id = o.customer_id WHERE o.order_date LIKE '2026-11%'"}
+]
