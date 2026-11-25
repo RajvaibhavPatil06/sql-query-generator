@@ -104,6 +104,24 @@ sqlite3 mydata.db
 
 **Set `SQLGEN_BLOCKED` for your own database.** It is a comma-separated list of `table.column` entries that can never be read. The default is `customers.email`, which only protects the demo data. With a different database and no `SQLGEN_BLOCKED`, every column is readable. You can also upload a CSV from the page: drop it on the upload box, tick the columns that must never be readable, and click Use this data. Uploads are accepted only from this machine (5 MB, 50 columns and 100,000 rows at most), the new data stays inactive until you confirm, and one dataset is active at a time. There is no authentication, so do not expose the server to a network. The accuracy numbers in this README were measured on the demo database only. A 4B model can still write invalid SQL for multi-step questions over an unfamiliar schema (a nested-aggregate question did in testing), so read the SQL it shows.
 
+## Using a different model
+
+Any server with an OpenAI-compatible chat endpoint works (llama.cpp, Ollama, vLLM). Set these in `.env` or the environment:
+
+```
+LOCAL_LLM_URL=http://127.0.0.1:8080/v1/chat/completions
+LOCAL_LLM_MODEL=name-the-server-expects
+LOCAL_LLM_KEY=only-for-hosted-endpoints
+SQLGEN_MAX_TOKENS=300
+SQLGEN_LLM_TIMEOUT=120
+```
+
+`LOCAL_LLM_MODEL` and `LOCAL_LLM_KEY` are only sent when set. Reasoning models spend tokens on thinking before the SQL: either turn reasoning off in the server or raise `SQLGEN_MAX_TOKENS`. Think blocks are stripped from the reply, and an empty reply gives a clear error.
+
+**Privacy:** the schema and your questions go to whatever `LOCAL_LLM_URL` points at. If that is another machine or a hosted service, they leave this computer. Cell values are never sent.
+
+**Not measured:** the accuracy numbers in this README are for Qwen3.5-4B. Larger models are expected to do better, but this has not been tested on a real large model.
+
 ## Tests
 
 ```bash

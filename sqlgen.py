@@ -5,6 +5,10 @@ from dotenv import load_dotenv
 load_dotenv()
 BACKEND = os.environ.get("SQLGEN_BACKEND", "local")  # "local" or "gemini"
 LOCAL_URL = os.environ.get("LOCAL_LLM_URL", "http://127.0.0.1:8080/v1/chat/completions")
+LOCAL_MODEL = os.environ.get("LOCAL_LLM_MODEL", "")
+LOCAL_KEY = os.environ.get("LOCAL_LLM_KEY", "")
+MAX_TOKENS = int(os.environ.get("SQLGEN_MAX_TOKENS", "300"))
+LLM_TIMEOUT = int(os.environ.get("SQLGEN_LLM_TIMEOUT", "120"))
 GEMINI_MODEL = "gemini-3.8-flash"  # model names change; check AI Studio if this errors
 RETRY_CODES = (500, 503)
 MAX_ATTEMPTS = 7
@@ -19,20 +23,28 @@ def get_schema(con):
     rows = con.execute("SELECT sql FROM sqlite_master WHERE type='table' AND sql IS NOT NULL")
     return "\n".join(r[0] for r in rows)
 
-def _call_local(prompt):
-    body = json.dumps({
+def _call_local(prompt, max_tokens=None):
+    body = {
         "messages": [{"role": "user", "content": prompt}],
         "temperature": 0,
-        "max_tokens": 300,
-    }).encode()
-    req = urllib.request.Request(LOCAL_URL, data=body, headers={"Content-Type": "application/json"})
+        "max_tokens": max_tokens or MAX_TOKENS,
+    }
+    if LOCAL_MODEL:
+        body["model"] = LOCAL_MODEL
+    headers = {"Content-Type": "application/json"}
+    if LOCAL_KEY:
+        headers["Authorization"] = "Bearer " + LOCAL_KEY
+    req = urllib.request.Request(LOCAL_URL, data=json.dumps(body).encode(), headers=headers)
     try:
-        with urllib.request.urlopen(req, timeout=120) as r:
-            return json.load(r)["choices"][0]["message"]["content"]
+        with urllib.request.urlopen(req, timeout=LLM_TIMEOUT) as r:
+            text = json.load(r)["choices"][0]["message"].get("content") or ""
     except (urllib.error.URLError, TimeoutError, KeyError, ValueError) as e:
         raise LLMError(f"Local model call failed: {e}")
+    if not text.strip():
+        raise LLMError("Model returned no text. For a reasoning model, raise SQLGEN_MAX_TOKENS or turn reasoning off.")
+    return text
 
-def _call_gemini(prompt):
+def _call_gemini(prompt, max_tokens=None):
     from google import genai
     from google.genai import errors
     client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
@@ -46,7 +58,7 @@ def _call_gemini(prompt):
             raise LLMError(f"Gemini API error {e.code}", code=e.code)
 
 def clean_sql(text):
-    text = text.strip()
+    text = re.sub(r"<think>.*?</think>", "", text, flags=re.S | re.I).strip()
     m = re.search(FENCE + r"(?:sql)?\s*(.*?)" + FENCE, text, re.S | re.I)
     if m:
         text = m.group(1)
