@@ -58,9 +58,11 @@ bypasses are closed, not that none exist.
 ```bash
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-python setup_db.py          # small demo database
-python build_eval_db.py     # larger evaluation database (fixed seed)
+python setup_db.py
+python build_eval_db.py
 ```
+
+`setup_db.py` creates a small demo database; `build_eval_db.py` creates a larger evaluation database from a fixed seed.
 
 Start a llama.cpp server (any GGUF model; the author used Qwen3.5-4B):
 
@@ -79,7 +81,9 @@ For Gemini instead of a local model, put `GEMINI_API_KEY=...` in `.env` and set 
 ## Tests
 
 ```bash
-python tests/test_security.py                          # validator attack cases, no model needed
-python tests/run_eval.py                               # basic accuracy set
-python tests/run_eval.py tests/cases_hard.json eval.db # harder set
+python tests/test_security.py
+python tests/run_eval.py
+python tests/run_eval.py tests/cases_hard.json eval.db
 ```
+
+`test_security.py` runs the validator attack cases and needs no model. `run_eval.py` scores the basic set, and with a cases file and a database as arguments it scores the harder sets.
