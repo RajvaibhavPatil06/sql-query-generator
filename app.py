@@ -1,7 +1,6 @@
 import csv, io, os, re, sqlite3
-import sqlglot
 from flask import Flask, render_template, request, jsonify
-from sqlgen import to_sql, repair_sql, get_schema, explain_sql
+from sqlgen import to_sql, repair_sql, get_schema
 from security import validate, run_readonly, audit
 
 app = Flask(__name__)
@@ -210,39 +209,6 @@ def query():
         return jsonify(sql=safe_sql, columns=cols, rows=rows, truncated=truncated, repaired=repaired)
     finally:
         con.close()
-
-@app.post("/api/explain")
-def explain():
-    data = request.get_json(silent=True) or {}
-    question = data.get("question")
-    sql = data.get("sql")
-    if not isinstance(question, str) or not isinstance(sql, str):
-        return jsonify(error="A question and its SQL are required."), 400
-    question, sql = question.strip(), sql.strip()
-    if not question or len(question) > 500 or not sql or len(sql) > 4000:
-        return jsonify(error="A question (up to 500 characters) and its SQL are required."), 400
-    con = sqlite3.connect(STATE["uri"], uri=True)
-    try:
-        allowed = [r[0] for r in con.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")]
-        schema = get_schema(con)
-    finally:
-        con.close()
-    ok, reason, safe_sql = validate(sql, allowed, STATE["blocked"])
-    if not ok:
-        return jsonify(error=f"Blocked: {reason}"), 400
-    try:
-        plain = sqlglot.parse_one(safe_sql, read="sqlite").sql(dialect="sqlite", comments=False)
-    except Exception:
-        return jsonify(error="Could not process the SQL."), 400
-    try:
-        text = explain_sql(question, schema, plain)
-    except Exception:
-        app.logger.exception("explain call failed")
-        audit({"question": question, "verdict": "explain_error"})
-        return jsonify(error="Explanation failed. Is the model server running?"), 502
-    audit({"question": question, "sql": plain, "verdict": "explain_ok"})
-    return jsonify(explanation=text)
 
 if __name__ == "__main__":
     app.run(host="127.0.0.1", port=5000)
