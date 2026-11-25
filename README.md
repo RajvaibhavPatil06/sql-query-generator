@@ -53,6 +53,12 @@ Security tests: 32 validator cases (`tests/test_security.py`) all behave as expe
 7 of 7 adversarial plain-English questions were blocked end to end. This shows common
 bypasses are closed, not that none exist.
 
+## Screenshot
+
+![Web UI answering a question over an uploaded CSV, with one column marked private](docs/screenshot.png)
+
+*A 10,000-row CSV uploaded through the page, with `unit_price_inr` marked private. The model writes the SQL, the validator checks it, and the query runs on a read-only connection.*
+
 ## Setup
 
 ```bash
