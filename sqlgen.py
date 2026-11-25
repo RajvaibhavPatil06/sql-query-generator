@@ -98,6 +98,27 @@ Rules:
     return clean_sql(call(prompt))
 
 
+def explain_sql(question, schema, sql):
+    """Explain a validated query in plain English. Only the question, schema and SQL are sent, never data."""
+    prompt = f"""You explain SQLite queries to a non-technical reader.
+Schema:
+{schema}
+
+Question: {question}
+
+Query:
+{sql}
+
+Rules:
+- Explain in 2 to 4 short plain-English sentences what the query does, step by step.
+- You have not seen any data, so do not state or guess any values or counts.
+- Plain text only: no markdown, no code, no lists.
+"""
+    call = _call_gemini if BACKEND == "gemini" else _call_local
+    text = call(prompt, max_tokens=max(MAX_TOKENS, 500))
+    return re.sub(r"<think>.*?</think>", "", text, flags=re.S | re.I).strip()
+
+
 if __name__ == "__main__":
     con = sqlite3.connect("sample.db")
     q = " ".join(sys.argv[1:]) or "Total order amount per city"

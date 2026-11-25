@@ -68,6 +68,9 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 @keyframes sp{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion:reduce){.spin{animation:none}*{transition:none!important}}
 .foot{margin-top:.5rem;color:var(--muted);font-size:.8rem;text-align:center}
+.explain{margin:.8rem 0 0;font-size:.92rem;white-space:pre-wrap}
+.explain.bad{color:var(--bad)}
+.explain.done::before{content:"AI explanation, can be wrong";display:block;margin-bottom:.2rem;color:var(--muted);font-size:.75rem;letter-spacing:.06em;text-transform:uppercase}
 </style>
 </head>
 <body>
@@ -273,7 +276,7 @@ function download(columns, rows) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-function render(ok, d, secs) {
+function render(ok, d, secs, question) {
   result.textContent = "";
   if (d.sql) {
     const c = el("div", "card");
@@ -286,9 +289,38 @@ function render(ok, d, secs) {
       catch (e) { cp.textContent = "Copy failed"; }
       setTimeout(() => { cp.textContent = "Copy"; }, 1200);
     });
-    h.appendChild(cp);
+    const ex = el("button", "btn ghost", "Explain");
+    ex.type = "button";
+    const expl = el("p", "explain");
+    expl.hidden = true;
+    ex.addEventListener("click", async () => {
+      ex.disabled = true;
+      expl.hidden = false;
+      expl.className = "explain";
+      expl.textContent = "Explaining…";
+      try {
+        const r2 = await fetch("/api/explain", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({question, sql: d.sql})
+        });
+        const e2 = await readJson(r2);
+        if (e2.error) { expl.className = "explain bad"; expl.textContent = e2.error; }
+        else { expl.className = "explain done"; expl.textContent = e2.explanation; }
+      } catch (err) {
+        expl.className = "explain bad";
+        expl.textContent = "Network error.";
+      } finally {
+        ex.disabled = false;
+      }
+    });
+    const acts = el("div", "ractions");
+    acts.appendChild(ex);
+    acts.appendChild(cp);
+    h.appendChild(acts);
     c.appendChild(h);
     c.appendChild(el("pre", "sql", d.sql));
+    c.appendChild(expl);
     result.appendChild(c);
   }
   if (!ok) { result.appendChild(errCard(d.error || "Something went wrong.")); return; }
@@ -357,7 +389,7 @@ async function run(text) {
       body: JSON.stringify({question})
     });
     const d = await readJson(r);
-    render(r.ok && !d.error, d, (performance.now() - t0) / 1000);
+    render(r.ok && !d.error, d, (performance.now() - t0) / 1000, question);
     remember(question);
   } catch (e) {
     result.textContent = "";

@@ -104,6 +104,10 @@ sqlite3 mydata.db
 
 **Set `SQLGEN_BLOCKED` for your own database.** It is a comma-separated list of `table.column` entries that can never be read. The default is `customers.email`, which only protects the demo data. With a different database and no `SQLGEN_BLOCKED`, every column is readable. You can also upload a CSV from the page: drop it on the upload box, tick the columns that must never be readable, and click Use this data. Uploads are accepted only from this machine (5 MB, 50 columns and 100,000 rows at most), the new data stays inactive until you confirm, and one dataset is active at a time. There is no authentication, so do not expose the server to a network. The accuracy numbers in this README were measured on the demo database only. A 4B model can still write invalid SQL for multi-step questions over an unfamiliar schema (a nested-aggregate question did in testing), so read the SQL it shows.
 
+## Explain
+
+Each generated query has an Explain button. It sends the model only your question, the schema and the validated SQL, never any rows, and shows a short plain-English description. The request is checked by the same validator as a normal query, so restricted columns and non-SELECT statements are refused. Explanations come from the same small model and can be wrong. They describe the SQL, not whether the SQL answers your question, so compare the two: a wrong-but-plausible query is the main failure to watch for.
+
 ## Using a different model
 
 Any server with an OpenAI-compatible chat endpoint works (llama.cpp, Ollama, vLLM). Set these in `.env` or the environment:
