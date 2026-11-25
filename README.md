@@ -84,6 +84,7 @@ For Gemini instead of a local model, put `GEMINI_API_KEY=...` in `.env` and set 
 python tests/test_security.py
 python tests/run_eval.py
 python tests/run_eval.py tests/cases_hard.json eval.db
+python tests/run_eval.py tests/cases_heldout.json eval.db
 ```
 
 `test_security.py` runs the validator attack cases and needs no model. `run_eval.py` scores the basic set, and with a cases file and a database as arguments it scores the harder sets.
