@@ -65,6 +65,27 @@ Question: {question}"""
     call = _call_gemini if BACKEND == "gemini" else _call_local
     return clean_sql(call(prompt))
 
+def repair_sql(question, schema, bad_sql, error):
+    """Ask the model to fix a query that failed to execute. Only the error text is sent, never data."""
+    prompt = f"""You fix SQLite SELECT queries.
+Schema:
+{schema}
+
+Question: {question}
+
+This query failed:
+{bad_sql}
+
+SQLite error: {error}
+
+Rules:
+- Output ONLY the corrected SQL, no markdown, no explanation. SELECT statements only.
+- Return only the columns the question asks for.
+"""
+    call = _call_gemini if BACKEND == "gemini" else _call_local
+    return clean_sql(call(prompt))
+
+
 if __name__ == "__main__":
     con = sqlite3.connect("sample.db")
     q = " ".join(sys.argv[1:]) or "Total order amount per city"

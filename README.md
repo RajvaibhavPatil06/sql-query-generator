@@ -14,6 +14,9 @@ question -> local LLM (schema only, never row data) -> SQL -> validator -> read-
   no `SELECT *` on tables with restricted columns. The query that runs is regenerated from
   the parse tree, not the model's raw string.
 - **Execution limits:** read-only database connection, 5 s timeout, 100-row cap.
+- **Self-correction:** if a validated query fails to execute, the SQLite error text (never data) is sent back to the
+  model once for a fix. The fix goes through the same validator, and queries the validator blocks are never retried.
+  This is a reliability feature; it does not affect the accuracy numbers below, because the eval harness skips it.
 - **Audit log:** one JSON line per request (question, SQL, verdict). Result rows are never logged.
 
 ## Threat model
