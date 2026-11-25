@@ -96,7 +96,7 @@ sqlite3 mydata.db
 .import mydata.csv mytable
 ```
 
-**Set `SQLGEN_BLOCKED` for your own database.** It is a comma-separated list of `table.column` entries that can never be read. The default is `customers.email`, which only protects the demo data. With a different database and no `SQLGEN_BLOCKED`, every column is readable. There is no upload feature, because uploaded files would need authentication first.
+**Set `SQLGEN_BLOCKED` for your own database.** It is a comma-separated list of `table.column` entries that can never be read. The default is `customers.email`, which only protects the demo data. With a different database and no `SQLGEN_BLOCKED`, every column is readable. You can also upload a CSV from the page: drop it on the upload box, tick the columns that must never be readable, and click Use this data. Uploads are accepted only from this machine (5 MB, 50 columns and 100,000 rows at most), the new data stays inactive until you confirm, and one dataset is active at a time. There is no authentication, so do not expose the server to a network. The accuracy numbers in this README were measured on the demo database only. A 4B model can still write invalid SQL for multi-step questions over an unfamiliar schema (a nested-aggregate question did in testing), so read the SQL it shows.
 
 ## Tests
 

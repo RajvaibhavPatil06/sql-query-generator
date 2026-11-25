@@ -3,67 +3,373 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>AI SQL Query Generator</title>
+<title>Private Text-to-SQL</title>
 <style>
-  body { font-family: system-ui, sans-serif; max-width: 800px; margin: 2rem auto; padding: 0 1rem; background:#111; color:#eee; }
-  input { width: 100%; padding: .7rem; font-size: 1rem; box-sizing: border-box; background:#1c1c1c; color:#eee; border:1px solid #444; border-radius:6px; }
-  button { margin-top: .6rem; padding: .6rem 1.2rem; font-size: 1rem; cursor: pointer; border-radius:6px; border:0; background:#3b82f6; color:#fff; }
-  button:disabled { opacity:.5; }
-  pre { background:#1c1c1c; padding:.8rem; border-radius:6px; overflow-x:auto; }
-  table { border-collapse: collapse; margin-top: 1rem; width:100%; }
-  th, td { border: 1px solid #444; padding: .4rem .7rem; text-align: left; }
-  .err { color: #f87171; }
-  .wrap { overflow-x:auto; }
+:root{--bg:#0b0d12;--panel:#12151c;--panel2:#181c26;--line:#262c3a;--text:#e8ebf2;--muted:#8d95a9;--accent:#7aa9ff;--btn:#2f6bf0;--ok:#4ade80;--warn:#fbbf24;--bad:#f87171;--mono:ui-monospace,"JetBrains Mono",SFMono-Regular,Menlo,Consolas,monospace}
+@media (prefers-color-scheme:light){:root{--bg:#f4f6fa;--panel:#fff;--panel2:#eef1f7;--line:#dde2ec;--text:#161a23;--muted:#586078;--accent:#1d4ed8;--ok:#15803d;--warn:#b45309;--bad:#b91c1c}}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html{color-scheme:dark light}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.55 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+header{max-width:1180px;margin:0 auto;padding:1.4rem 1rem .4rem}
+header h1{margin:0;font-size:1.45rem;letter-spacing:-.01em}
+header p{margin:.2rem 0 0;color:var(--muted)}
+.app{max-width:1180px;margin:0 auto;padding:1rem 1rem 3rem;display:grid;grid-template-columns:330px minmax(0,1fr);gap:1.1rem;align-items:start}
+@media(max-width:880px){.app{grid-template-columns:1fr}}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:1rem;margin-bottom:1rem}
+.lbl{display:block;font-size:.72rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:.55rem}
+.pill{display:flex;align-items:center;gap:.5rem;padding:.55rem .7rem;background:var(--panel2);border:1px solid var(--line);border-radius:10px;font-family:var(--mono);font-size:.9rem;word-break:break-all}
+.dot{width:.55rem;height:.55rem;border-radius:50%;background:var(--ok);flex:none}
+.chips{display:flex;flex-wrap:wrap;align-items:center;gap:.4rem;margin-top:.6rem}
+.chip{font:inherit;font-size:.82rem;padding:.28rem .65rem;border-radius:999px;border:1px solid var(--line);background:var(--panel2);color:var(--text);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+button.chip{cursor:pointer}
+button.chip:hover{border-color:var(--accent)}
+.chip.lock{font-family:var(--mono);color:var(--warn);border-color:color-mix(in srgb,var(--warn) 40%,var(--line))}
+.note{font-size:.85rem;color:var(--muted);margin-top:.5rem}
+.note.bad{color:var(--bad)}
+.note.warn{color:var(--warn)}
+.drop{display:flex;flex-direction:column;gap:.15rem;align-items:center;text-align:center;padding:1.1rem .8rem;border:1.5px dashed var(--line);border-radius:12px;cursor:pointer;color:var(--muted);transition:border-color .15s,background .15s}
+.drop:hover,.drop.over,.drop:focus-visible{border-color:var(--accent);background:var(--panel2);outline:none}
+.drop strong{color:var(--text)}
+#fname{font-style:normal;font-family:var(--mono);color:var(--accent);font-size:.85rem;word-break:break-all}
+.btn{font:inherit;font-weight:600;padding:.6rem 1.1rem;border:0;border-radius:10px;background:var(--btn);color:#fff;cursor:pointer}
+.btn:hover:not(:disabled){filter:brightness(1.12)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn.ghost{background:transparent;color:var(--text);border:1px solid var(--line);font-weight:500;padding:.3rem .7rem;font-size:.85rem}
+.btn.full{width:100%;margin-top:.7rem}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.tgl{position:relative;cursor:pointer;user-select:none}
+.tgl input{position:absolute;opacity:0;pointer-events:none}
+.tgl span{display:inline-block;padding:.28rem .65rem;border-radius:999px;border:1px solid var(--line);background:var(--panel2);font-family:var(--mono);font-size:.82rem}
+.tgl input:checked + span{border-color:var(--warn);color:var(--warn);background:color-mix(in srgb,var(--warn) 12%,transparent)}
+.tgl input:checked + span::before{content:"🔒 "}
+.tgl input:focus-visible + span{outline:2px solid var(--accent);outline-offset:2px}
+.ask{display:flex;gap:.6rem}
+.ask input{flex:1;min-width:0;font:inherit;font-size:1.02rem;padding:.8rem .95rem;border-radius:10px;border:1px solid var(--line);background:var(--panel2);color:var(--text)}
+.ask input::placeholder{color:var(--muted)}
+.rhead{display:flex;align-items:center;justify-content:space-between;gap:.6rem;flex-wrap:wrap;margin-bottom:.6rem}
+.rhead .lbl{margin:0}
+.ractions{display:flex;align-items:center;gap:.6rem;flex-wrap:wrap}
+.meta{color:var(--muted);font-size:.85rem}
+.badge{display:inline-block;padding:.05rem .5rem;border-radius:999px;font-size:.75rem;border:1px solid var(--line);margin-left:.45rem}
+.badge.warn{color:var(--warn);border-color:var(--warn)}
+pre.sql{margin:0;padding:.8rem .9rem;background:var(--panel2);border:1px solid var(--line);border-radius:10px;font:13px/1.55 var(--mono);white-space:pre-wrap;word-break:break-word}
+.tw{max-height:62vh;overflow:auto;border:1px solid var(--line);border-radius:10px}
+table{border-collapse:collapse;width:100%;font-size:.92rem}
+th,td{padding:.5rem .8rem;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}
+th{position:sticky;top:0;background:var(--panel2);font-weight:600;font-size:.8rem;letter-spacing:.03em}
+tbody tr:nth-child(even){background:color-mix(in srgb,var(--panel2) 55%,transparent)}
+tr:last-child td{border-bottom:0}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+.null{color:var(--muted);font-style:italic}
+.err{border-color:color-mix(in srgb,var(--bad) 55%,var(--line))}
+.err .msg{color:var(--bad);margin:.2rem 0 0}
+.spin{width:1rem;height:1rem;border:2px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:sp .8s linear infinite;display:inline-block;vertical-align:-.2em;margin-right:.5rem}
+@keyframes sp{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.spin{animation:none}*{transition:none!important}}
+.foot{margin-top:.5rem;color:var(--muted);font-size:.8rem;text-align:center}
 </style>
 </head>
 <body>
-  <h1>AI SQL Query Generator</h1>
-  <input id="q" placeholder="e.g. Total order amount per city" maxlength="500" autofocus>
-  <button id="go">Generate &amp; Run</button>
-  <div id="out"></div>
+<header>
+  <h1>Private Text-to-SQL</h1>
+  <p>Ask your database in plain English. The model sees your schema, never your rows.</p>
+</header>
+<main class="app">
+  <aside>
+    <section class="card">
+      <span class="lbl">Data source</span>
+      <div class="pill"><span class="dot"></span><span id="dname">loading…</span></div>
+      <div id="hidden" class="chips"></div>
+      <div id="hnote" class="note"></div>
+    </section>
+    <section class="card">
+      <span class="lbl">Use your own data</span>
+      <label id="drop" class="drop" for="csv" tabindex="0">
+        <input type="file" id="csv" accept=".csv" hidden>
+        <strong>Drop a CSV here</strong>
+        <span>or click to choose · max 5 MB</span>
+        <em id="fname"></em>
+      </label>
+      <button id="up" class="btn full" type="button" disabled>Upload CSV</button>
+      <div id="upmsg" class="note" role="status" aria-live="polite"></div>
+      <div id="priv" hidden>
+        <span class="lbl" style="margin-top:1rem">Private columns</span>
+        <div class="note" style="margin:0 0 .5rem">Ticked columns can never be read. Choose before using the data.</div>
+        <div id="cols" class="chips"></div>
+        <button id="use" class="btn full" type="button">Use this data</button>
+      </div>
+    </section>
+  </aside>
+  <section>
+    <div class="card">
+      <label class="lbl" for="q">Ask a question</label>
+      <div class="ask">
+        <input id="q" maxlength="500" autocomplete="off" placeholder="e.g. Total order amount per city" autofocus>
+        <button id="go" class="btn" type="button">Run</button>
+      </div>
+      <div id="examples" class="chips"></div>
+      <div id="hist" class="chips"></div>
+    </div>
+    <div id="result" aria-live="polite"></div>
+    <p class="foot">SELECT-only validator · read-only connection · 5 s timeout · 100-row cap</p>
+  </section>
+</main>
 <script>
-const q = document.getElementById("q"), go = document.getElementById("go"), out = document.getElementById("out");
+const $ = id => document.getElementById(id);
+const q = $("q"), go = $("go"), result = $("result"), csv = $("csv"), up = $("up"), upmsg = $("upmsg"),
+      drop = $("drop"), fname = $("fname"), priv = $("priv"), cols = $("cols"), use = $("use"),
+      dname = $("dname"), hiddenEl = $("hidden"), hnote = $("hnote"), examples = $("examples"), hist = $("hist");
+const HDR = {"X-SQLGen": "1"};
+const recentList = [];
 
-async function run() {
-  const question = q.value.trim();
+function el(tag, cls, text) {
+  const n = document.createElement(tag);
+  if (cls) n.className = cls;
+  if (text !== undefined) n.textContent = text;
+  return n;
+}
+function chipBtn(text, fn) {
+  const b = el("button", "chip", text);
+  b.type = "button";
+  b.addEventListener("click", fn);
+  return b;
+}
+async function readJson(r) {
+  try { return await r.json(); }
+  catch (e) { return {error: "Unexpected response from the server (HTTP " + r.status + ")."}; }
+}
+function note(text, kind) {
+  upmsg.textContent = text;
+  upmsg.className = "note" + (kind ? " " + kind : "");
+}
+
+async function loadStatus() {
+  try {
+    const d = await readJson(await fetch("/api/status"));
+    dname.textContent = d.name || "unknown";
+    hiddenEl.textContent = "";
+    const all = Object.entries(d.blocked || {}).flatMap(([t, cs]) => cs.map(c => t + "." + c));
+    all.forEach(c => hiddenEl.appendChild(el("span", "chip lock", "🔒 " + c)));
+    hnote.textContent = all.length ? "These columns can never be read." : "No columns are hidden. Everything in this data can be read.";
+    hnote.className = "note" + (all.length ? "" : " warn");
+    renderExamples(d.name);
+  } catch (e) {
+    dname.textContent = "unavailable";
+  }
+}
+
+function renderExamples(name) {
+  examples.textContent = "";
+  if (name !== "eval.db") return;
+  ["How many customers are there?", "Total order amount per city", "Which 3 products have the highest total revenue?"]
+    .forEach(t => examples.appendChild(chipBtn(t, () => run(t))));
+}
+
+function renderRecent() {
+  hist.textContent = "";
+  if (!recentList.length) return;
+  hist.appendChild(el("span", "meta", "Recent"));
+  recentList.forEach(t => hist.appendChild(chipBtn(t, () => run(t))));
+}
+function remember(t) {
+  const i = recentList.indexOf(t);
+  if (i > -1) recentList.splice(i, 1);
+  recentList.unshift(t);
+  recentList.length = Math.min(recentList.length, 6);
+  renderRecent();
+}
+
+function picked() {
+  const f = csv.files[0];
+  fname.textContent = f ? f.name : "";
+  up.disabled = !f;
+  priv.hidden = true;
+  cols.textContent = "";
+  note("");
+}
+csv.addEventListener("change", picked);
+drop.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); csv.click(); } });
+["dragenter", "dragover"].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add("over"); }));
+["dragleave", "drop"].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove("over"); }));
+drop.addEventListener("drop", e => {
+  if (e.dataTransfer.files.length) { csv.files = e.dataTransfer.files; picked(); }
+});
+
+up.addEventListener("click", async () => {
+  const f = csv.files[0];
+  if (!f) return;
+  if (f.size > 5 * 1024 * 1024) { note("File is over 5 MB.", "bad"); return; }
+  up.disabled = true;
+  note("Uploading…");
+  try {
+    const fd = new FormData();
+    fd.append("file", f);
+    const r = await fetch("/api/upload", {method: "POST", headers: HDR, body: fd});
+    const d = await readJson(r);
+    if (d.error) { note(d.error, "bad"); return; }
+    note("Loaded " + d.rows + " rows into table " + d.table + ".");
+    cols.textContent = "";
+    d.columns.forEach(c => {
+      const l = el("label", "tgl");
+      const i = document.createElement("input");
+      i.type = "checkbox";
+      i.value = c;
+      l.appendChild(i);
+      l.appendChild(el("span", null, c));
+      cols.appendChild(l);
+    });
+    priv.hidden = false;
+  } catch (e) {
+    note("Network error.", "bad");
+  } finally {
+    up.disabled = false;
+  }
+});
+
+use.addEventListener("click", async () => {
+  const blocked = [...cols.querySelectorAll("input:checked")].map(i => i.value);
+  use.disabled = true;
+  try {
+    const r = await fetch("/api/activate", {
+      method: "POST",
+      headers: {...HDR, "Content-Type": "application/json"},
+      body: JSON.stringify({blocked})
+    });
+    const d = await readJson(r);
+    if (d.error) { note(d.error, "bad"); return; }
+    csv.value = "";
+    picked();
+    note("Now querying table " + d.table + ".");
+    result.textContent = "";
+    loadStatus();
+  } catch (e) {
+    note("Network error.", "bad");
+  } finally {
+    use.disabled = false;
+  }
+});
+
+function errCard(msg) {
+  const c = el("div", "card err");
+  c.appendChild(el("span", "lbl", msg.startsWith("Blocked") ? "Blocked by the validator" : "Problem"));
+  c.appendChild(el("p", "msg", msg));
+  return c;
+}
+
+function download(columns, rows) {
+  const esc = v => {
+    if (v === null) return "";
+    let s = String(v);
+    if (typeof v === "string" && /^[=+\-@\t\r]/.test(s)) s = "'" + s;
+    return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  };
+  const text = [columns.map(esc).join(",")].concat(rows.map(r => r.map(esc).join(","))).join("\n");
+  const url = URL.createObjectURL(new Blob([text], {type: "text/csv"}));
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "result.csv";
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function render(ok, d, secs) {
+  result.textContent = "";
+  if (d.sql) {
+    const c = el("div", "card");
+    const h = el("div", "rhead");
+    h.appendChild(el("span", "lbl", "Generated SQL"));
+    const cp = el("button", "btn ghost", "Copy");
+    cp.type = "button";
+    cp.addEventListener("click", async () => {
+      try { await navigator.clipboard.writeText(d.sql); cp.textContent = "Copied"; }
+      catch (e) { cp.textContent = "Copy failed"; }
+      setTimeout(() => { cp.textContent = "Copy"; }, 1200);
+    });
+    h.appendChild(cp);
+    c.appendChild(h);
+    c.appendChild(el("pre", "sql", d.sql));
+    result.appendChild(c);
+  }
+  if (!ok) { result.appendChild(errCard(d.error || "Something went wrong.")); return; }
+  const rows = d.rows || [], columns = d.columns || [];
+  const c = el("div", "card");
+  const h = el("div", "rhead");
+  h.appendChild(el("span", "lbl", "Result"));
+  const right = el("div", "ractions");
+  const info = el("span", "meta", rows.length + (rows.length === 1 ? " row" : " rows") + " · " + secs.toFixed(1) + " s");
+  if (d.truncated) info.appendChild(el("span", "badge warn", "capped at 100 rows"));
+  if (d.repaired) info.appendChild(el("span", "badge", "auto-corrected"));
+  right.appendChild(info);
+  if (rows.length) {
+    const dl = el("button", "btn ghost", "Download CSV");
+    dl.type = "button";
+    dl.addEventListener("click", () => download(columns, rows));
+    right.appendChild(dl);
+  }
+  h.appendChild(right);
+  c.appendChild(h);
+  if (!rows.length) {
+    c.appendChild(el("p", "meta", "No rows returned."));
+  } else {
+    const num = columns.map((_, i) => { const r = rows.find(x => x[i] !== null); return !!r && typeof r[i] === "number"; });
+    const tw = el("div", "tw");
+    const t = document.createElement("table");
+    const hr = t.createTHead().insertRow();
+    columns.forEach((name, i) => {
+      const th = document.createElement("th");
+      th.textContent = name;
+      if (num[i]) th.className = "num";
+      hr.appendChild(th);
+    });
+    const tb = t.createTBody();
+    rows.forEach(row => {
+      const tr = tb.insertRow();
+      row.forEach((v, i) => {
+        const td = tr.insertCell();
+        if (v === null) { td.className = "null"; td.textContent = "NULL"; }
+        else { td.textContent = v; if (num[i]) td.className = "num"; }
+      });
+    });
+    tw.appendChild(t);
+    c.appendChild(tw);
+  }
+  result.appendChild(c);
+}
+
+async function run(text) {
+  const question = (text === undefined ? q.value : text).trim();
   if (!question) return;
-  go.disabled = true; out.textContent = "Thinking...";
+  q.value = question;
+  go.disabled = true;
+  result.textContent = "";
+  const wait = el("div", "card");
+  const lab = el("span", null, "Thinking…");
+  wait.appendChild(el("span", "spin"));
+  wait.appendChild(lab);
+  result.appendChild(wait);
+  const t0 = performance.now();
+  const timer = setInterval(() => { lab.textContent = "Thinking… " + Math.floor((performance.now() - t0) / 1000) + "s"; }, 500);
   try {
     const r = await fetch("/api/query", {
       method: "POST",
       headers: {"Content-Type": "application/json"},
       body: JSON.stringify({question})
     });
-    const d = await r.json();
-    out.textContent = "";
-    if (d.sql) {
-      const pre = document.createElement("pre");
-      pre.textContent = d.sql;
-      out.appendChild(pre);
-    }
-    if (d.error) {
-      const p = document.createElement("p");
-      p.className = "err"; p.textContent = d.error;
-      out.appendChild(p);
-      return;
-    }
-    const wrap = document.createElement("div"); wrap.className = "wrap";
-    const t = document.createElement("table");
-    const hr = t.insertRow();
-    d.columns.forEach(c => { const th = document.createElement("th"); th.textContent = c; hr.appendChild(th); });
-    d.rows.forEach(row => {
-      const tr = t.insertRow();
-      row.forEach(v => { tr.insertCell().textContent = v === null ? "NULL" : v; });
-    });
-    wrap.appendChild(t); out.appendChild(wrap);
+    const d = await readJson(r);
+    render(r.ok && !d.error, d, (performance.now() - t0) / 1000);
+    remember(question);
   } catch (e) {
-    out.textContent = "Network error.";
+    result.textContent = "";
+    result.appendChild(errCard("Network error. Is the app still running?"));
   } finally {
+    clearInterval(timer);
     go.disabled = false;
   }
 }
-go.addEventListener("click", run);
+go.addEventListener("click", () => run());
 q.addEventListener("keydown", e => { if (e.key === "Enter") run(); });
+loadStatus();
 </script>
 </body>
 </html>
