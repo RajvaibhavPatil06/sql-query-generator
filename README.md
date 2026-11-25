@@ -56,6 +56,8 @@ bypasses are closed, not that none exist.
 ## Setup
 
 ```bash
+git clone https://github.com/RajvaibhavPatil06/sql-query-generator.git
+cd sql-query-generator
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 python setup_db.py
@@ -64,7 +66,7 @@ python build_eval_db.py
 
 `setup_db.py` creates a small demo database; `build_eval_db.py` creates a larger evaluation database from a fixed seed.
 
-Start a llama.cpp server (any GGUF model; the author used Qwen3.5-4B):
+You need a local model first: build llama.cpp (see its own README) and download any instruction-tuned GGUF model. The author used Qwen3.5-4B, quantized to Q4. Then start the server:
 
 ```bash
 llama-server -m /path/to/model.gguf -c 4096 --host 127.0.0.1 --port 8080
@@ -77,6 +79,24 @@ SQLGEN_DB=eval.db python app.py
 ```
 
 For Gemini instead of a local model, put `GEMINI_API_KEY=...` in `.env` and set `SQLGEN_BACKEND=gemini`.
+
+## Using your own data
+
+The app works with any SQLite file. The table list and schema are read from the database on every request.
+
+```
+SQLGEN_DB=mydata.db SQLGEN_BLOCKED="users.phone,users.ssn" python app.py
+```
+
+To turn a CSV into a SQLite file:
+
+```
+sqlite3 mydata.db
+.mode csv
+.import mydata.csv mytable
+```
+
+**Set `SQLGEN_BLOCKED` for your own database.** It is a comma-separated list of `table.column` entries that can never be read. The default is `customers.email`, which only protects the demo data. With a different database and no `SQLGEN_BLOCKED`, every column is readable. There is no upload feature, because uploaded files would need authentication first.
 
 ## Tests
 

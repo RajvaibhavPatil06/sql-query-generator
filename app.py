@@ -6,7 +6,17 @@ from security import validate, run_readonly, audit
 app = Flask(__name__)
 DB_FILE = os.environ.get("SQLGEN_DB", "sample.db")
 DB_URI = f"file:{DB_FILE}?mode=ro"  # last line of defense: the DB itself is read-only
-BLOCKED_COLUMNS = {"customers": ["email"]}  # never readable through this app
+def _parse_blocked(spec):
+    out = {}
+    for item in spec.split(","):
+        item = item.strip().lower()
+        if "." not in item:
+            continue
+        table, col = item.split(".", 1)
+        out.setdefault(table, []).append(col)
+    return out
+
+BLOCKED_COLUMNS = _parse_blocked(os.environ.get("SQLGEN_BLOCKED", "customers.email"))
 
 @app.get("/")
 def index():
