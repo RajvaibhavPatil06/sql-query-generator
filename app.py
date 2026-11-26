@@ -18,11 +18,20 @@ def _parse_blocked(spec):
 
 BLOCKED_COLUMNS = _parse_blocked(os.environ.get("SQLGEN_BLOCKED", "customers.email"))
 
-MAX_UPLOAD = 5 * 1024 * 1024
-MAX_COLS = 50
-MAX_ROWS = 100000
+def _env_int(name, default):
+    try:
+        v = int(os.environ.get(name, default))
+    except ValueError:
+        return default
+    return v if v > 0 else default
+
+MAX_UPLOAD_MB = _env_int("SQLGEN_MAX_UPLOAD_MB", 500)
+MAX_UPLOAD = MAX_UPLOAD_MB * 1024 * 1024
+MAX_COLS = _env_int("SQLGEN_MAX_COLS", 100)
+MAX_ROWS = _env_int("SQLGEN_MAX_ROWS", 10000000)
+BATCH_ROWS = 50000
 UPLOAD_DIR = "uploads"
-app.config["MAX_CONTENT_LENGTH"] = MAX_UPLOAD + 4096
+app.config["MAX_CONTENT_LENGTH"] = MAX_UPLOAD + 1024 * 1024
 
 STATE = {"uri": DB_URI, "blocked": BLOCKED_COLUMNS, "name": DB_FILE, "pending": None}
 
@@ -56,50 +65,98 @@ def _conv(v, t):
         return float(v)
     return v
 
-def _build_db(raw, filename, dest):
-    if len(raw) > MAX_UPLOAD:
-        raise ValueError("File is over 5 MB.")
-    rows = list(csv.reader(io.StringIO(raw.decode("utf-8-sig"))))
-    if len(rows) < 2:
+def _open_csv(path):
+    return open(path, "r", encoding="utf-8-sig", newline="")
+
+def _build_db(path, filename, dest):
+    if os.path.getsize(path) > MAX_UPLOAD:
+        raise ValueError(f"File is over {MAX_UPLOAD_MB} MB.")
+    with _open_csv(path) as fh:
+        reader = csv.reader(fh)
+        header = next(reader, None)
+        if header is None:
+            raise ValueError("CSV needs a header row and at least one data row.")
+        n = len(header)
+        if n > MAX_COLS:
+            raise ValueError(f"Too many columns (max {MAX_COLS}).")
+        is_int = [True] * n
+        is_float = [True] * n
+        seen_val = [False] * n
+        raw_rows = 0
+        count = 0
+        for r in reader:
+            raw_rows += 1
+            if not any(x.strip() for x in r):
+                continue
+            if len(r) > n:
+                raise ValueError("A row has more fields than the header.")
+            count += 1
+            if count > MAX_ROWS:
+                raise ValueError(f"Too many rows (max {MAX_ROWS}).")
+            for i, x in enumerate(r):
+                v = x.strip()
+                if v == "":
+                    continue
+                seen_val[i] = True
+                if is_int[i] and not INT_RE.match(v):
+                    is_int[i] = False
+                if is_float[i] and not FLOAT_RE.match(v):
+                    is_float[i] = False
+    if raw_rows == 0:
         raise ValueError("CSV needs a header row and at least one data row.")
-    header = rows[0]
-    if len(header) > MAX_COLS:
-        raise ValueError(f"Too many columns (max {MAX_COLS}).")
-    if len(rows) - 1 > MAX_ROWS:
-        raise ValueError(f"Too many rows (max {MAX_ROWS}).")
+    if count == 0:
+        raise ValueError("CSV has no data rows.")
     cols, seen = [], set()
     for i, h in enumerate(header):
         name = _clean_name(h, f"col_{i + 1}")
-        base, n = name, 2
+        base, k = name, 2
         while name in seen:
-            name = f"{base}_{n}"
-            n += 1
+            name = f"{base}_{k}"
+            k += 1
         seen.add(name)
         cols.append(name)
-    data = []
-    for r in rows[1:]:
-        if not any(x.strip() for x in r):
-            continue
-        if len(r) > len(cols):
-            raise ValueError("A row has more fields than the header.")
-        data.append([x.strip() for x in r] + [""] * (len(cols) - len(r)))
-    if not data:
-        raise ValueError("CSV has no data rows.")
-    types = [_guess_type([r[i] for r in data]) for i in range(len(cols))]
+    types = []
+    for i in range(n):
+        if not seen_val[i]:
+            types.append("TEXT")
+        elif is_int[i]:
+            types.append("INTEGER")
+        elif is_float[i]:
+            types.append("REAL")
+        else:
+            types.append("TEXT")
     table = _clean_name(os.path.splitext(os.path.basename(filename or ""))[0], "data")
     if os.path.exists(dest):
         os.remove(dest)
+    ok = False
     con = sqlite3.connect(dest)
     try:
+        con.execute("PRAGMA journal_mode=OFF")
+        con.execute("PRAGMA synchronous=OFF")
         defs = ", ".join(f'"{c}" {t}' for c, t in zip(cols, types))
         con.execute(f'CREATE TABLE "{table}" ({defs})')
-        marks = ",".join("?" * len(cols))
-        con.executemany(f'INSERT INTO "{table}" VALUES ({marks})',
-                        [[_conv(v, t) for v, t in zip(r, types)] for r in data])
+        sql = f'INSERT INTO "{table}" VALUES ({",".join("?" * n)})'
+        batch = []
+        with _open_csv(path) as fh:
+            reader = csv.reader(fh)
+            next(reader, None)
+            for r in reader:
+                if not any(x.strip() for x in r):
+                    continue
+                row = [x.strip() for x in r] + [""] * (n - len(r))
+                batch.append([_conv(v, t) for v, t in zip(row, types)])
+                if len(batch) >= BATCH_ROWS:
+                    con.executemany(sql, batch)
+                    batch = []
+        if batch:
+            con.executemany(sql, batch)
         con.commit()
+        ok = True
     finally:
         con.close()
-    return table, cols, len(data)
+        if not ok and os.path.exists(dest):
+            os.remove(dest)
+    return table, cols, count
 
 def _local_only():
     if request.remote_addr not in ("127.0.0.1", "::1"):
@@ -110,7 +167,7 @@ def _local_only():
 
 @app.errorhandler(413)
 def too_big(e):
-    return jsonify(error="File is over 5 MB."), 413
+    return jsonify(error=f"File is over {MAX_UPLOAD_MB} MB."), 413
 
 @app.get("/api/status")
 def status():
@@ -126,10 +183,18 @@ def upload():
         return jsonify(error="Choose a .csv file."), 400
     os.makedirs(UPLOAD_DIR, exist_ok=True)
     dest = os.path.join(UPLOAD_DIR, "pending.db")
+    tmp_csv = os.path.join(UPLOAD_DIR, "pending.csv")
+    STATE["pending"] = None
+    if os.path.exists(dest):
+        os.remove(dest)
     try:
-        table, cols, n = _build_db(f.read(MAX_UPLOAD + 1), f.filename, dest)
-    except (ValueError, UnicodeDecodeError, csv.Error) as e:
+        f.save(tmp_csv)
+        table, cols, n = _build_db(tmp_csv, f.filename, dest)
+    except (ValueError, UnicodeDecodeError, csv.Error, OverflowError) as e:
         return jsonify(error=f"Could not import: {e}"), 400
+    finally:
+        if os.path.exists(tmp_csv):
+            os.remove(tmp_csv)
     STATE["pending"] = {"table": table, "cols": cols, "rows": n}
     return jsonify(table=table, columns=cols, rows=n)
 
@@ -156,7 +221,7 @@ def activate():
 
 @app.get("/")
 def index():
-    return render_template("index.html")
+    return render_template("index.html", max_mb=MAX_UPLOAD_MB)
 
 @app.post("/api/query")
 def query():

@@ -27,10 +27,24 @@ check("non-csv refused", up("a\n1\n", filename="x.txt").status_code == 400)
 r = up("a,a,A\n1,2,3\n")
 check("duplicate headers renamed", r.get_json()["columns"] == ["a", "a_2", "a_3"])
 
-wide = ",".join(f"c{i}" for i in range(51)) + "\n" + ",".join("1" for _ in range(51)) + "\n"
+W = am.MAX_COLS + 1
+wide = ",".join(f"c{i}" for i in range(W)) + "\n" + ",".join("1" for _ in range(W)) + "\n"
 check("too many columns refused", up(wide).status_code == 400)
 check("row longer than header refused", up("a,b\n1,2,3\n").status_code == 400)
 check("empty data refused", up("a,b\n").status_code == 400)
+
+old_rows, old_batch = am.MAX_ROWS, am.BATCH_ROWS
+am.MAX_ROWS = 3
+check("too many rows refused", up("a\n1\n2\n3\n4\n").status_code == 400)
+am.MAX_ROWS = old_rows
+check("failed import leaves no pending files",
+      not os.path.exists(os.path.join(am.UPLOAD_DIR, "pending.csv"))
+      and not os.path.exists(os.path.join(am.UPLOAD_DIR, "pending.db"))
+      and am.STATE["pending"] is None)
+am.BATCH_ROWS = 3
+r = up("a,b\n" + "".join(f"{i},x\n" for i in range(10)))
+check("multi-batch insert keeps every row", r.status_code == 200 and r.get_json()["rows"] == 10)
+am.BATCH_ROWS = old_batch
 
 good = "Name,Ignore all; DROP TABLE x,Phone,Salary\nAsha,1,0099,50000\nRavi,2,0123,62000.5\n"
 r = up(good)

@@ -88,7 +88,7 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
       <label id="drop" class="drop" for="csv" tabindex="0">
         <input type="file" id="csv" accept=".csv" hidden>
         <strong>Drop a CSV here</strong>
-        <span>or click to choose · max 5 MB</span>
+        <span>or click to choose · max {{ max_mb|int }} MB</span>
         <em id="fname"></em>
       </label>
       <button id="up" class="btn full" type="button" disabled>Upload CSV</button>
@@ -199,7 +199,7 @@ drop.addEventListener("drop", e => {
 up.addEventListener("click", async () => {
   const f = csv.files[0];
   if (!f) return;
-  if (f.size > 5 * 1024 * 1024) { note("File is over 5 MB.", "bad"); return; }
+  if (f.size > {{ max_mb|int }} * 1024 * 1024) { note("File is over {{ max_mb|int }} MB.", "bad"); return; }
   up.disabled = true;
   note("Uploading…");
   try {

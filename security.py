@@ -65,7 +65,16 @@ import json, os, sqlite3, time
 from datetime import datetime, timezone
 
 AUDIT_PATH = os.environ.get("SQLGEN_AUDIT", "audit.log")
-TIMEOUT_S = 5
+import os as _os
+
+def _env_timeout(default):
+    try:
+        v = float(_os.environ.get("SQLGEN_QUERY_TIMEOUT", default))
+    except ValueError:
+        return default
+    return v if 0 < v <= 3600 else default
+
+TIMEOUT_S = _env_timeout(5)
 MAX_ROWS = 100
 
 def audit(event):
