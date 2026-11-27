@@ -42,6 +42,7 @@ Execution accuracy: generated SQL and a hand-written reference query must return
 | 6 basic questions, 2-table database | Qwen3.5-4B (Q4, local, CPU) | 6/6 |
 | 15 harder questions, 4-table database | Qwen3.5-4B (Q4, local, CPU) | 13/15 before prompt rules, 14/15 after (rules were written from this set's failures, so this is not a clean test) |
 | 12 held-out questions, same database (written before prompt tuning) | Qwen3.5-4B (Q4, local, CPU) | 11/12 before and 11/12 after |
+| 22 questions on an uploaded 2,400,000-row, 21-column CSV (14 basic, 8 harder) | Qwen3.5-4B (Q4, local, CPU) | 18 correct, 1 partial, 3 wrong (prompt not changed for this run) |
 
 Caveats: small test sets, one run each, and the questions were written by the author.
 Remaining failures are of two kinds: returning an extra column (strict comparison counts
@@ -49,8 +50,16 @@ this as a failure, and the model still does it after a prompt rule against it), 
 confusing what one row of the answer represents (for example, listing cities when the
 question asks how many cities). The prompt rules did not change the held-out score.
 
+Supply-chain run: the questions were written before the run, the prompt was not changed for it, and each question was asked once. 26 questions were written and 22 were run (the last four hard ones were skipped). Basic questions scored 12/14. Of the 8 harder questions, 6 were correct, 1 was partial and 1 was wrong. The earlier prompt rules were written from other question sets, so this is a better test than the 15-question set but not a fully clean one, and at 22 questions one question is about 5 points. The misses:
+
+- Stored value guessed wrong: asked for the total cost of "cancelled" shipments, the model wrote `status = 'cancelled'`, but the stored value is `Cancelled`. SQLite compares text case-sensitively, so the query returned NULL with no error. The model only sees the schema, never the rows, so it cannot know the stored spelling.
+- Top result per group: "for each warehouse, which product category has the highest total cost" returned a single row (the first warehouse, which happened to be correct). "For each warehouse, which carrier handled the most shipments" returned all 30 warehouse and carrier combinations, with the correct data but no per-group limit.
+- Counting groups: "how many suppliers have an average rating above 3.01" returned one row per qualifying supplier (15 rows, each reading 1) and not a single count of 15.
+
+Questions like these need a second level of aggregation, which is where the 4B model is weakest. A wrong answer here can look plausible, so read the SQL it shows.
+
 Security tests: 32 validator cases (`tests/test_security.py`) all behave as expected, and
-7 of 7 adversarial plain-English questions were blocked end to end. This shows common
+7 of 7 adversarial plain-English questions were blocked end to end, and 3 more (two reads of private columns and a DELETE) were blocked on the uploaded CSV. This shows common
 bypasses are closed, not that none exist.
 
 ## Screenshot
